@@ -12,7 +12,7 @@
 <meta property="og:locale" content="fr_FR">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64.png">
 <link rel="apple-touch-icon" href="assets/favicon-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=5">
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "InsuranceAgency", "name": "AJM Courtage", "slogan": "Mieux assuré ensemble", "address": {"@type": "PostalAddress", "streetAddress": "9 rue de la Butte", "postalCode": "77167", "addressLocality": "Bagneaux-sur-Loing", "addressCountry": "FR"}}</script>
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Le service est-il payant ?", "acceptedAnswer": {"@type": "Answer", "text": "Non. La mise en relation et la comparaison sont gratuites. Le cabinet est rémunéré par les compagnies d'assurance, comme tout courtier."}}, {"@type": "Question", "name": "Quel est le délai pour recevoir une proposition ?", "acceptedAnswer": {"@type": "Answer", "text": "Un conseiller vous recontacte sous quelques jours ouvrés pour préciser votre besoin, puis vous transmet une proposition adaptée."}}, {"@type": "Question", "name": "Travaillez-vous avec plusieurs assureurs ?", "acceptedAnswer": {"@type": "Answer", "text": "Oui. Comparer plusieurs compagnies fait partie du rôle du courtier : nous ne sommes liés à aucune marque unique."}}, {"@type": "Question", "name": "Puis-je comparer plusieurs assurances en une seule demande ?", "acceptedAnswer": {"@type": "Answer", "text": "Oui. Le formulaire de devis permet de sélectionner plusieurs besoins à la fois, par exemple santé, auto et habitation."}}, {"@type": "Question", "name": "Comment serai-je recontacté ?", "acceptedAnswer": {"@type": "Answer", "text": "Vous choisissez dans le formulaire d'être recontacté par téléphone ou par e-mail, et vous pouvez demander à être rappelé à un moment précis de la journée."}}, {"@type": "Question", "name": "Mes informations sont-elles protégées ?", "acceptedAnswer": {"@type": "Answer", "text": "Vos informations servent à traiter votre demande. Le détail de leur utilisation et de vos droits figure dans notre politique de confidentialité."}}]}</script>
 </head>
@@ -192,7 +192,7 @@
         <input type="hidden" name="form-name" value="rappel">
         <p class="honeypot" aria-hidden="true"><label>Ne pas remplir <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
         <div class="row">
-          <div class="field"><label for="cb-prenom">Prénom</label><input class="input" id="cb-prenom" name="prenom" autocomplete="given-name" required></div>
+          <div class="field"><label for="cb-prenom">Prénom</label><input class="input" id="cb-prenom" name="prenom" maxlength="80" autocomplete="given-name" required></div>
           <div class="field"><label for="cb-tel">Téléphone</label><input class="input" id="cb-tel" name="telephone" type="tel" autocomplete="tel" inputmode="tel" required><p class="error-msg">Numéro invalide.</p></div>
         </div>
         <div class="field" style="margin-bottom:12px"><label for="cb-creneau">Créneau souhaité</label>
@@ -284,6 +284,6 @@
     </div>
   </div>
 </footer>
-<script src="js/main.js" defer></script>
+<script src="js/main.js?v=5" defer></script>
 </body>
 </html>

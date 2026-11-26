@@ -21,3 +21,10 @@ Hors Netlify (ouverture du fichier en local), l'envoi affiche un message d'erreu
 Repérez les commentaires `À COMPLÉTER` dans le pied de page (tous les fichiers) et `mentions-legales.html` :
 n° ORIAS, garantie financière / RCP, coordonnées de l'ACPR et du médiateur de l'assurance,
 adresse e-mail et téléphone de contact. Faites relire les pages légales par un juriste.
+
+## Sécurité (audit du 27/11/2026)
+- Aucun script ni ressource externe ; aucune clé ou secret dans le code.
+- En-têtes Netlify : CSP stricte (`script-src 'self'`, `form-action 'self'`, `object-src 'none'`), HSTS, X-Frame-Options, COOP, Permissions-Policy.
+- Données saisies échappées avant affichage (test d'injection `<img onerror>` : non exécuté). Anti-spam : champ piège `bot-field` ; limites de longueur sur les champs.
+- Brouillon du formulaire : `sessionStorage` uniquement (effacé à la fermeture de l'onglet et après envoi).
+- À faire côté Netlify : activer les notifications de formulaire, ajouter reCAPTCHA si le spam apparaît, renseigner `data-fallback-mail` dans devis.html.
