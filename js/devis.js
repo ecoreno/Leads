@@ -23,6 +23,7 @@
       li.classList.toggle('current', i + 1 === n);
     });
     if (alertBox) alertBox.className = 'form-alert';
+    if (n === 2) syncDetails();
     if (initial) return;
     var top = document.querySelector('.progress');
     if (top) window.scrollTo({ top: top.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
@@ -67,6 +68,36 @@
 
   form.querySelectorAll('input[name="besoins"]').forEach(function (i) { i.addEventListener('change', syncSante); });
 
+  /* ---------- Étape 2 : questions propres à chaque produit ---------- */
+  function syncDetails() {
+    var any = false;
+    form.querySelectorAll('.pq').forEach(function (fs) {
+      var on = !!form.querySelector('input[name="besoins"][value="' + fs.getAttribute('data-prod') + '"]:checked');
+      fs.hidden = !on; fs.disabled = !on;
+      if (on) any = true;
+    });
+    return any;
+  }
+
+  function detailGroups() {
+    var groups = [];
+    form.querySelectorAll('.pq:not([hidden])').forEach(function (fs) {
+      var rows = [], seen = {};
+      fs.querySelectorAll('input, select').forEach(function (el) {
+        var q = el.getAttribute('data-q');
+        if (!q || seen[el.name]) return;
+        seen[el.name] = 1;
+        var v = '';
+        if (el.type === 'radio') { var r = fs.querySelector('input[name="' + el.name + '"]:checked'); v = r ? r.value : ''; }
+        else if (el.type === 'checkbox') { v = Array.prototype.map.call(fs.querySelectorAll('input[name="' + el.name + '"]:checked'), function (c) { return c.value; }).join(', '); }
+        else { v = el.value.trim(); }
+        if (v) rows.push([q, v]);
+      });
+      groups.push({ name: fs.getAttribute('data-label'), rows: rows });
+    });
+    return groups;
+  }
+
   /* ---------- Pré-sélection via l'URL (?besoin=auto&cp=75001) ---------- */
   var params = new URLSearchParams(window.location.search);
   var pre = params.get('besoin');
@@ -96,7 +127,7 @@
       err.style.display = any ? 'none' : 'block';
       if (!any) { ok = false; firstBad = form.querySelector('input[name="besoins"]'); }
     }
-    if (n === 2) {
+    if (n === 3) {
       var rules = {
         code_postal: function (v) { return /^\d{5}$/.test(v); },
         prenom: function (v) { return v.length >= 2; },
@@ -142,6 +173,10 @@
         return '<li><span>' + esc(h.name) + '</span><span class="st" aria-label="Priorité ' + h.prio + ' sur 4">' + stars(h.prio) + '</span></li>';
       }).join('') + '</ul>';
     }
+    detailGroups().forEach(function (g) {
+      if (!g.rows.length) return;
+      html += '<h3>' + esc(g.name) + '</h3><ul>' + g.rows.map(function (r) { return '<li><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></li>'; }).join('') + '</ul>';
+    });
     html += '<h3>Votre demande</h3><ul>' +
       '<li><span>Code postal</span><span>' + esc(val('code_postal')) + '</span></li>' +
       (delai ? '<li><span>Échéance</span><span>' + esc(delai.value) + '</span></li>' : '') + '</ul>';
@@ -154,7 +189,12 @@
     /* Résumé lisible, ajouté à l'e-mail de notification Netlify */
     var txt = 'Besoins : ' + needs.join(', ');
     if (health.length) txt += '\nPriorités santé : ' + health.map(function (h) { return h.name + ' (' + h.prio + '/4)'; }).join(' ; ');
+    detailGroups().forEach(function (g) {
+      if (g.rows.length) txt += '\n\n' + g.name.toUpperCase() + '\n' + g.rows.map(function (r) { return '- ' + r[0] + ' : ' + r[1]; }).join('\n');
+    });
+    txt += '\n\nContact : ' + val('prenom') + ' ' + val('nom') + ' · ' + val('email') + ' · ' + val('telephone') + ' · CP ' + val('code_postal');
     form.querySelector('[name="resume"]').value = txt;
+    return txt;
   }
 
   /* ---------- Boutons ---------- */
@@ -163,7 +203,7 @@
     var prev = e.target.closest('[data-prev]');
     if (next) {
       var n = Number(next.getAttribute('data-next'));
-      if (validateStep(current)) { if (n === 3) buildSummary(); show(n); }
+      if (validateStep(current)) { if (n === 4) buildSummary(); show(n); }
     }
     if (prev) show(Number(prev.getAttribute('data-prev')));
   });
@@ -184,26 +224,56 @@
       return;
     }
     buildSummary();
+    var mail = form.getAttribute('data-fallback-mail');
     var btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
     btn.textContent = 'Envoi en cours…';
 
-    fetch('/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(new FormData(form)).toString()
-    }).then(function (r) {
-      if (!r.ok) throw new Error('http ' + r.status);
+    var data = new URLSearchParams(new FormData(form)).toString();
+    var txt = form.querySelector('[name="resume"]').value;
+
+    function done() {
       steps.forEach(function (s) { s.hidden = true; });
       document.getElementById('step-done').hidden = false;
       progress.forEach(function (li) { li.classList.remove('current'); li.classList.add('done'); });
       window.scrollTo({ top: 0, behavior: 'smooth' });
       var h = document.querySelector('#step-done h2'); if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
-    }).catch(function () {
+    }
+
+    /* Netlify Forms accepte un POST vers la racine ou vers la page du formulaire.
+       On essaie les deux chemins avant de signaler une erreur. */
+    var targets = ['/', window.location.pathname];
+    function attempt(i) {
+      return fetch(targets[i], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: data
+      }).then(function (r) {
+        if (r.ok || r.redirected) return;
+        throw new Error('http ' + r.status);
+      }).catch(function (err) {
+        if (i + 1 < targets.length) return attempt(i + 1);
+        throw err;
+      });
+    }
+
+    attempt(0).then(done).catch(function () {
       btn.disabled = false;
       btn.textContent = 'Envoyer ma demande';
       alertBox.className = 'form-alert err show';
-      alertBox.textContent = "L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez.";
+      alertBox.innerHTML = '';
+      var m = document.createElement('div');
+      m.textContent = "L'envoi automatique n'a pas abouti. Réessayez en envoi classique" + (mail ? ' ou envoyez-nous votre demande par e-mail.' : '.');
+      var alt = document.createElement('div'); alt.className = 'alt';
+      var b1 = document.createElement('button'); b1.type = 'button'; b1.className = 'btn btn-primary'; b1.textContent = 'Réessayer';
+      b1.addEventListener('click', function () { form.submit(); });
+      alt.appendChild(b1);
+      if (mail) {
+        var a = document.createElement('a'); a.className = 'btn btn-ghost';
+        a.href = 'mailto:' + mail + '?subject=' + encodeURIComponent('Demande de devis AJM Courtage') + '&body=' + encodeURIComponent(txt);
+        a.textContent = 'Envoyer par e-mail'; alt.appendChild(a);
+      }
+      alertBox.appendChild(m); alertBox.appendChild(alt);
     });
   });
 

@@ -108,12 +108,11 @@
       if (!ok) { tel.focus(); return; }
       var btn = cb.querySelector('button[type="submit"]');
       btn.disabled = true;
-      fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(new FormData(cb)).toString()
-      }).then(function (r) {
-        if (!r.ok) throw new Error('http ' + r.status);
+      var body = new URLSearchParams(new FormData(cb)).toString();
+      var post = function (u) { return fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body }).then(function (r) { if (!r.ok && !r.redirected) throw new Error('http ' + r.status); }); };
+      post('/').catch(function () { return post(window.location.pathname); })
+      .then(function () {
+        if (false) throw 0;
         cb.innerHTML = '<div class="success"><div class="okc"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h2 style="font-size:22px;margin-bottom:8px">Demande de rappel envoyée</h2><p style="margin:0 auto">Un conseiller AJM Courtage vous recontacte sous quelques jours ouvrés.</p></div>';
       }).catch(function () {
         btn.disabled = false;
