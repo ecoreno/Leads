@@ -1,0 +1,211 @@
+/* AJM Courtage — formulaire de devis multi-besoins (3 étapes) */
+(function () {
+  'use strict';
+
+  var form = document.getElementById('devis-form');
+  if (!form) return;
+
+  var steps = Array.prototype.slice.call(form.querySelectorAll('.form-step[data-step]'));
+  var progress = document.querySelectorAll('.progress li');
+  var alertBox = document.getElementById('form-alert');
+  var current = 1;
+
+  var PRIO = { 1: 'Faible', 2: 'Moyenne', 3: 'Importante', 4: 'Essentielle' };
+  var NEED_LABELS = {};
+  form.querySelectorAll('input[name="besoins"]').forEach(function (i) { NEED_LABELS[i.value] = i.getAttribute('data-label'); });
+
+  /* ---------- Navigation entre étapes ---------- */
+  function show(n, initial) {
+    current = n;
+    steps.forEach(function (s) { s.hidden = Number(s.getAttribute('data-step')) !== n; });
+    progress.forEach(function (li, i) {
+      li.classList.toggle('done', i + 1 < n);
+      li.classList.toggle('current', i + 1 === n);
+    });
+    if (alertBox) alertBox.className = 'form-alert';
+    if (initial) return;
+    var top = document.querySelector('.progress');
+    if (top) window.scrollTo({ top: top.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
+    var h = steps[n - 1].querySelector('h2');
+    if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+  }
+
+  /* ---------- Besoins : bloc santé + priorités ---------- */
+  var santeBox = document.getElementById('sante-box');
+  var santeInput = form.querySelector('input[name="besoins"][value="sante"]');
+
+  function syncSante() {
+    if (!santeBox || !santeInput) return;
+    santeBox.hidden = !santeInput.checked;
+  }
+
+  function setRow(row, on) {
+    row.classList.toggle('on', on);
+    var radios = row.querySelectorAll('input[type="radio"]');
+    radios.forEach(function (r) { r.disabled = !on; if (!on) r.checked = false; });
+    if (on && !row.querySelector('input[type="radio"]:checked')) {
+      var def = row.querySelector('input[type="radio"][value="2"]');
+      if (def) def.checked = true;
+    }
+    updateLabel(row);
+  }
+
+  function updateLabel(row) {
+    var lab = row.querySelector('.prio-label');
+    var checked = row.querySelector('input[type="radio"]:checked');
+    if (lab) lab.textContent = checked && row.classList.contains('on') ? PRIO[checked.value] : 'Priorité';
+  }
+
+  form.querySelectorAll('.hrow').forEach(function (row) {
+    var cb = row.querySelector('input[type="checkbox"]');
+    setRow(row, cb.checked);
+    cb.addEventListener('change', function () { setRow(row, cb.checked); });
+    row.querySelectorAll('input[type="radio"]').forEach(function (r) {
+      r.addEventListener('change', function () { updateLabel(row); });
+    });
+  });
+
+  form.querySelectorAll('input[name="besoins"]').forEach(function (i) { i.addEventListener('change', syncSante); });
+
+  /* ---------- Pré-sélection via l'URL (?besoin=auto&cp=75001) ---------- */
+  var params = new URLSearchParams(window.location.search);
+  var pre = params.get('besoin');
+  if (pre) {
+    pre.split(',').forEach(function (v) {
+      var el = form.querySelector('input[name="besoins"][value="' + v.replace(/[^a-z-]/g, '') + '"]');
+      if (el) el.checked = true;
+    });
+  }
+  var cp = params.get('cp');
+  if (cp && /^\d{5}$/.test(cp)) form.querySelector('[name="code_postal"]').value = cp;
+  syncSante();
+
+  /* ---------- Validation ---------- */
+  function setInvalid(el, bad) {
+    var f = el.closest('.field');
+    if (f) f.classList.toggle('invalid', bad);
+  }
+
+  function validateStep(n) {
+    var ok = true, firstBad = null;
+    function bad(el) { ok = false; setInvalid(el, true); if (!firstBad) firstBad = el; }
+
+    if (n === 1) {
+      var any = form.querySelectorAll('input[name="besoins"]:checked').length > 0;
+      var err = document.getElementById('needs-error');
+      err.style.display = any ? 'none' : 'block';
+      if (!any) { ok = false; firstBad = form.querySelector('input[name="besoins"]'); }
+    }
+    if (n === 2) {
+      var rules = {
+        code_postal: function (v) { return /^\d{5}$/.test(v); },
+        prenom: function (v) { return v.length >= 2; },
+        nom: function (v) { return v.length >= 2; },
+        email: function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); },
+        telephone: function (v) { return /^[\d\s.+()-]{9,18}$/.test(v); }
+      };
+      Object.keys(rules).forEach(function (name) {
+        var el = form.querySelector('[name="' + name + '"]');
+        var v = el.value.trim();
+        if (rules[name](v)) setInvalid(el, false); else bad(el);
+      });
+    }
+    if (firstBad) firstBad.focus();
+    return ok;
+  }
+
+  /* ---------- Récapitulatif ---------- */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function stars(n) { return '★'.repeat(n) + '☆'.repeat(4 - n); }
+
+  function healthLines() {
+    var out = [];
+    form.querySelectorAll('.hrow.on').forEach(function (row) {
+      var name = row.querySelector('.hname').textContent.trim();
+      var r = row.querySelector('input[type="radio"]:checked');
+      out.push({ name: name, prio: r ? Number(r.value) : 0 });
+    });
+    return out;
+  }
+
+  function buildSummary() {
+    var needs = Array.prototype.map.call(form.querySelectorAll('input[name="besoins"]:checked'), function (i) { return NEED_LABELS[i.value]; });
+    var health = healthLines();
+    var val = function (n) { return form.querySelector('[name="' + n + '"]').value.trim(); };
+    var delai = form.querySelector('input[name="echeance"]:checked');
+
+    var html = '<h3>Besoins sélectionnés</h3><ul>' + needs.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>';
+    if (health.length) {
+      html += '<h3>Priorités santé</h3><ul>' + health.map(function (h) {
+        return '<li><span>' + esc(h.name) + '</span><span class="st" aria-label="Priorité ' + h.prio + ' sur 4">' + stars(h.prio) + '</span></li>';
+      }).join('') + '</ul>';
+    }
+    html += '<h3>Votre demande</h3><ul>' +
+      '<li><span>Code postal</span><span>' + esc(val('code_postal')) + '</span></li>' +
+      (delai ? '<li><span>Échéance</span><span>' + esc(delai.value) + '</span></li>' : '') + '</ul>';
+    html += '<h3>Coordonnées</h3><ul>' +
+      '<li><span>' + esc(val('prenom') + ' ' + val('nom')) + '</span></li>' +
+      '<li><span>' + esc(val('email')) + '</span></li>' +
+      '<li><span>' + esc(val('telephone')) + '</span></li></ul>';
+    document.getElementById('summary').innerHTML = html;
+
+    /* Résumé lisible, ajouté à l'e-mail de notification Netlify */
+    var txt = 'Besoins : ' + needs.join(', ');
+    if (health.length) txt += '\nPriorités santé : ' + health.map(function (h) { return h.name + ' (' + h.prio + '/4)'; }).join(' ; ');
+    form.querySelector('[name="resume"]').value = txt;
+  }
+
+  /* ---------- Boutons ---------- */
+  form.addEventListener('click', function (e) {
+    var next = e.target.closest('[data-next]');
+    var prev = e.target.closest('[data-prev]');
+    if (next) {
+      var n = Number(next.getAttribute('data-next'));
+      if (validateStep(current)) { if (n === 3) buildSummary(); show(n); }
+    }
+    if (prev) show(Number(prev.getAttribute('data-prev')));
+  });
+
+  ['code_postal', 'prenom', 'nom', 'email', 'telephone'].forEach(function (n) {
+    form.querySelector('[name="' + n + '"]').addEventListener('input', function (e) { setInvalid(e.target, false); });
+  });
+  form.querySelectorAll('input[name="besoins"]').forEach(function (i) {
+    i.addEventListener('change', function () { document.getElementById('needs-error').style.display = 'none'; });
+  });
+
+  /* ---------- Envoi (Netlify Forms) ---------- */
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!form.querySelector('input[name="consentement"]').checked) {
+      alertBox.className = 'form-alert err show';
+      alertBox.textContent = 'Merci de cocher la case de consentement pour envoyer votre demande.';
+      return;
+    }
+    buildSummary();
+    var btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Envoi en cours…';
+
+    fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(form)).toString()
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      steps.forEach(function (s) { s.hidden = true; });
+      document.getElementById('step-done').hidden = false;
+      progress.forEach(function (li) { li.classList.remove('current'); li.classList.add('done'); });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      var h = document.querySelector('#step-done h2'); if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
+    }).catch(function () {
+      btn.disabled = false;
+      btn.textContent = 'Envoyer ma demande';
+      alertBox.className = 'form-alert err show';
+      alertBox.textContent = "L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez.";
+    });
+  });
+
+  show(1, true);
+})();
